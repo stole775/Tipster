@@ -17,7 +17,7 @@ dependencies = [
   "pydantic>=2.5",
   "pyarrow>=15.0",
   "tqdm>=4.66",
-  "euroleague-api>=0.4.6",
+  "euroleague-api>=0.0.21",
   "xgboost>=2.0",
 ]
 
@@ -26,3 +26,6 @@ dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.10"]
 
 [project.scripts]
 elwf = "elwf.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/elwf"]
