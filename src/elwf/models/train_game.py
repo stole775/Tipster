@@ -97,6 +97,17 @@ def walk_forward_games(
 
     pred_df = pd.concat(preds, ignore_index=True) if preds else pd.DataFrame()
 
+    metrics: dict[str, float] = {}
+    if not pred_df.empty:
+        metrics = {
+            "logloss": log_loss(pred_df[target_col], pred_df["p_home_win"]),
+            "brier": brier_score_loss(pred_df[target_col], pred_df["p_home_win"]),
+            "acc@0.5": accuracy_score(
+                pred_df[target_col], (pred_df["p_home_win"] >= 0.5).astype(int)
+            ),
+            "effective_min_train": float(effective_min_train),
+        }
+
     if pred_df.empty:
         per_round_df = pd.DataFrame(per_round_records) if per_round_records else None
         raise ValueError(
@@ -105,14 +116,7 @@ def walk_forward_games(
             "See per-round diagnostics for details."
         )
 
-    metrics: dict[str, float] = {
-        "logloss": log_loss(pred_df[target_col], pred_df["p_home_win"]),
-        "brier": brier_score_loss(pred_df[target_col], pred_df["p_home_win"]),
-        "acc@0.5": accuracy_score(
-            pred_df[target_col], (pred_df["p_home_win"] >= 0.5).astype(int)
-        ),
-        "effective_min_train": float(effective_min_train),
-    }
+        }
 
     upcoming_preds: pd.DataFrame | None = None
     if upcoming_df is not None and last_model is not None:

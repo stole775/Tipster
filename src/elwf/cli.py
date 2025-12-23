@@ -51,6 +51,7 @@ def main() -> None:
         upcoming_df=upcoming_df,
         min_train_size=args.min_train,
     )
+    result = run_walkforward(games_df, features_df, upcoming_df=upcoming_df)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     result.predictions.to_csv(args.out, index=False)
 
