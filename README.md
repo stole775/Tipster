@@ -68,6 +68,43 @@ Rezultati:
 - `artifacts/walk.csv` sa kolonama `season,round,game_code,y_home_win,p_home_win`
 - `artifacts/walk.metrics.json` sa metrikama (`logloss`, `brier`, `acc@0.5`).
 
+### Brzi start sa sample CSV fajlovima
+
+U repo-u postoje primeri u folderu `examples/`:
+
+- `examples/sample_games.csv`
+- `examples/sample_game_features.csv`
+- `examples/sample_upcoming.csv` (opciono za buduća kola)
+
+Pokretanje bez upcoming:
+
+```bash
+elwf examples/sample_games.csv examples/sample_game_features.csv --out artifacts/walk.csv
+```
+
+Pokretanje sa upcoming (predikcije za sledeće kolo):
+
+```bash
+elwf examples/sample_games.csv examples/sample_game_features.csv \
+     --upcoming examples/sample_upcoming.csv \
+     --out artifacts/walk.csv
+```
+
+Output:
+- `artifacts/walk.csv` – istorijske predikcije
+- `artifacts/walk.metrics.json` – metrike na istoriji
+- `artifacts/walk.per_round.csv` – metrike po kolu
+- `artifacts/walk.upcoming.csv` – predikcije za buduće kolo (ako `--upcoming`)
+
+Napomena: sample set je mali, pa je potrebno spustiti prag za veličinu treninga:
+```bash
+elwf examples/sample_games.csv examples/sample_game_features.csv \
+     --upcoming examples/sample_upcoming.csv \
+     --out artifacts/walk.csv \
+     --min-train 1
+```
+Za realne podatke zadržite podrazumevani `--min-train 20` ili više.
+
 ## The Odds API (kvote)
 
 Minimalan primer dohvaćanja kvota:
