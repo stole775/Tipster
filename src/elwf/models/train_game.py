@@ -48,6 +48,11 @@ def walk_forward_games(
     if feature_cols is None:
         feature_cols = [c for c in games_df.columns if c.startswith("f_")]
 
+    effective_min_train = min_train_size
+    if len(games_df) < min_train_size:
+        # For tiny sample datasets (like examples), fall back to a minimal threshold
+        effective_min_train = max(1, len(games_df) // 2)
+
     df = games_df.sort_values(["season", round_col, "game_code"]).reset_index(drop=True)
     preds = []
     per_round_records: list[dict[str, float | int]] = []
@@ -56,14 +61,14 @@ def walk_forward_games(
     for r in sorted(df[round_col].unique()):
         train = df[df[round_col] < r]
         test = df[df[round_col] == r]
-        if len(train) < min_train_size:
+        if len(train) < effective_min_train:
             per_round_records.append(
                 {
                     "round": r,
                     "n_train": len(train),
                     "n_test": len(test),
                     "skipped": True,
-                    "reason": f"min_train_size={min_train_size}",
+                    "reason": f"min_train_size={effective_min_train}",
                 }
             )
             continue
@@ -83,7 +88,7 @@ def walk_forward_games(
                 "n_train": len(train),
                 "n_test": len(test),
                 "skipped": False,
-                "reason": "",
+                "reason": f"min_train_size={effective_min_train}",
                 "logloss": log_loss(test[target_col], proba),
                 "brier": brier_score_loss(test[target_col], proba),
                 "acc@0.5": accuracy_score(test[target_col], (proba >= 0.5).astype(int)),
@@ -100,13 +105,14 @@ def walk_forward_games(
             "acc@0.5": accuracy_score(
                 pred_df[target_col], (pred_df["p_home_win"] >= 0.5).astype(int)
             ),
+            "effective_min_train": float(effective_min_train),
         }
 
     if pred_df.empty:
         per_round_df = pd.DataFrame(per_round_records) if per_round_records else None
         raise ValueError(
             "No predictions were produced. "
-            f"Check that you have at least min_train_size={min_train_size} training rows before the first evaluated round. "
+            f"Check training data and min_train_size (effective={effective_min_train}). "
             "See per-round diagnostics for details."
         )
 

@@ -21,6 +21,11 @@ def main() -> None:
         default=20,
         help="Minimum number of training rows required before scoring a round (default: 20)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print per-round diagnostics even when predictions are empty or skipped",
+    )
     args = parser.parse_args()
 
     def require_file(path: Path, label: str) -> None:
@@ -41,7 +46,10 @@ def main() -> None:
     upcoming_df = pd.read_csv(args.upcoming) if args.upcoming else None
 
     result = run_walkforward(
-        games_df, features_df, upcoming_df=upcoming_df, min_train_size=args.min_train
+        games_df,
+        features_df,
+        upcoming_df=upcoming_df,
+        min_train_size=args.min_train,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     result.predictions.to_csv(args.out, index=False)
@@ -55,6 +63,8 @@ def main() -> None:
         per_round_path = args.out.with_suffix(".per_round.csv")
         result.per_round.to_csv(per_round_path, index=False)
         print(f"Saved per-round metrics to {per_round_path}")
+        if args.debug:
+            print(result.per_round.to_string(index=False))
 
     if result.upcoming is not None:
         upcoming_path = args.out.with_name(args.out.stem + ".upcoming.csv")

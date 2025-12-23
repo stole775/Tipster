@@ -101,7 +101,8 @@ Napomena: sample set je mali, pa je potrebno spustiti prag za veličinu treninga
 elwf examples/sample_games.csv examples/sample_game_features.csv \
      --upcoming examples/sample_upcoming.csv \
      --out artifacts/walk.csv \
-     --min-train 1
+     --min-train 1 \
+     --debug
 ```
 Za realne podatke zadržite podrazumevani `--min-train 20` ili više.
 
