@@ -12,6 +12,8 @@ from sklearn.metrics import accuracy_score, brier_score_loss, log_loss
 class GameModelResult:
     predictions: pd.DataFrame
     metrics: dict[str, float]
+    per_round: pd.DataFrame | None = None
+    upcoming: pd.DataFrame | None = None
 
 
 class GameWinnerModel:
@@ -38,6 +40,7 @@ def walk_forward_games(
     feature_cols: Iterable[str] | None = None,
     target_col: str = "y_home_win",
     round_col: str = "round",
+    upcoming_df: pd.DataFrame | None = None,
 ) -> GameModelResult:
     """Train and evaluate round-by-round to avoid look-ahead bias."""
 
@@ -46,6 +49,8 @@ def walk_forward_games(
 
     df = games_df.sort_values(["season", round_col, "game_code"]).reset_index(drop=True)
     preds = []
+    per_round_records: list[dict[str, float | int]] = []
+    last_model: LogisticRegression | None = None
 
     for r in sorted(df[round_col].unique()):
         train = df[df[round_col] < r]
@@ -55,20 +60,47 @@ def walk_forward_games(
 
         model = LogisticRegression(max_iter=2000)
         model.fit(train[list(feature_cols)], train[target_col])
+        last_model = model
 
         proba = model.predict_proba(test[list(feature_cols)])[:, 1]
         out = test[["season", round_col, "game_code", target_col]].copy()
         out["p_home_win"] = proba
         preds.append(out)
 
-    pred_df = pd.concat(preds, ignore_index=True)
-    metrics = {
-        "logloss": log_loss(pred_df[target_col], pred_df["p_home_win"]),
-        "brier": brier_score_loss(pred_df[target_col], pred_df["p_home_win"]),
-        "acc@0.5": accuracy_score(
-            pred_df[target_col], (pred_df["p_home_win"] >= 0.5).astype(int)
-        ),
-    }
+        per_round_records.append(
+            {
+                "round": r,
+                "n_train": len(train),
+                "n_test": len(test),
+                "logloss": log_loss(test[target_col], proba),
+                "brier": brier_score_loss(test[target_col], proba),
+                "acc@0.5": accuracy_score(test[target_col], (proba >= 0.5).astype(int)),
+            }
+        )
 
-    return GameModelResult(pred_df, metrics)
+    pred_df = pd.concat(preds, ignore_index=True) if preds else pd.DataFrame()
 
+    metrics: dict[str, float] = {}
+    if not pred_df.empty:
+        metrics = {
+            "logloss": log_loss(pred_df[target_col], pred_df["p_home_win"]),
+            "brier": brier_score_loss(pred_df[target_col], pred_df["p_home_win"]),
+            "acc@0.5": accuracy_score(
+                pred_df[target_col], (pred_df["p_home_win"] >= 0.5).astype(int)
+            ),
+        }
+
+    upcoming_preds: pd.DataFrame | None = None
+    if upcoming_df is not None and last_model is not None:
+        upcoming_df = upcoming_df.copy()
+        missing_cols = [c for c in feature_cols if c not in upcoming_df.columns]
+        if missing_cols:
+            raise ValueError(f"Upcoming games missing feature columns: {missing_cols}")
+        proba = last_model.predict_proba(upcoming_df[list(feature_cols)])[:, 1]
+        upcoming_preds = upcoming_df[["season", round_col, "game_code"]].copy()
+        upcoming_preds["p_home_win"] = proba
+        upcoming_preds["is_future"] = True
+
+    per_round_df = pd.DataFrame(per_round_records) if per_round_records else None
+
+    return GameModelResult(pred_df, metrics, per_round=per_round_df, upcoming=upcoming_preds)
