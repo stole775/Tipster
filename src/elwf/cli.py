@@ -17,6 +17,18 @@ def main() -> None:
     parser.add_argument("--upcoming", type=Path, help="Optional CSV with upcoming games and features")
     args = parser.parse_args()
 
+    def require_file(path: Path, label: str) -> None:
+        if not path.exists():
+            parser.error(
+                f"Missing {label} file at '{path}'. "
+                "Verify you are running the command from the project root and that the path is correct."
+            )
+
+    require_file(args.games, "games")
+    require_file(args.features, "features")
+    if args.upcoming is not None:
+        require_file(args.upcoming, "upcoming")
+
     games_df = pd.read_csv(args.games)
     features_df = pd.read_csv(args.features)
 
