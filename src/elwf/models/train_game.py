@@ -116,6 +116,8 @@ def walk_forward_games(
             "See per-round diagnostics for details."
         )
 
+        }
+
     upcoming_preds: pd.DataFrame | None = None
     if upcoming_df is not None and last_model is not None:
         upcoming_df = upcoming_df.copy()

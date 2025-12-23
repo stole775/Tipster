@@ -96,15 +96,6 @@ Output:
 - `artifacts/walk.per_round.csv` – metrike po kolu
 - `artifacts/walk.upcoming.csv` – predikcije za buduće kolo (ako `--upcoming`)
 
-Napomena: sample set je mali, pa je potrebno spustiti prag za veličinu treninga:
-```bash
-elwf examples/sample_games.csv examples/sample_game_features.csv \
-     --upcoming examples/sample_upcoming.csv \
-     --out artifacts/walk.csv \
-     --min-train 1 \
-     --debug
-```
-Za realne podatke zadržite podrazumevani `--min-train 20` ili više.
 
 ## The Odds API (kvote)
 

@@ -22,3 +22,4 @@ def run_walkforward(
     return walk_forward_games(
         merged, target_col=target_col, upcoming_df=upcoming_df, min_train_size=min_train_size
     )
+    return walk_forward_games(merged, target_col=target_col, upcoming_df=upcoming_df)
