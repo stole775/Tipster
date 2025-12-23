@@ -12,6 +12,8 @@ from sklearn.metrics import accuracy_score, brier_score_loss, log_loss
 class GameModelResult:
     predictions: pd.DataFrame
     metrics: dict[str, float]
+    per_round: pd.DataFrame | None = None
+    upcoming: pd.DataFrame | None = None
 
 
 class GameWinnerModel:
@@ -38,37 +40,91 @@ def walk_forward_games(
     feature_cols: Iterable[str] | None = None,
     target_col: str = "y_home_win",
     round_col: str = "round",
+    upcoming_df: pd.DataFrame | None = None,
+    min_train_size: int = 20,
 ) -> GameModelResult:
     """Train and evaluate round-by-round to avoid look-ahead bias."""
 
     if feature_cols is None:
         feature_cols = [c for c in games_df.columns if c.startswith("f_")]
 
+    effective_min_train = min_train_size
+    if len(games_df) < min_train_size:
+        # For tiny sample datasets (like examples), fall back to a minimal threshold
+        effective_min_train = max(1, len(games_df) // 2)
+
     df = games_df.sort_values(["season", round_col, "game_code"]).reset_index(drop=True)
     preds = []
+    per_round_records: list[dict[str, float | int]] = []
+    last_model: LogisticRegression | None = None
 
     for r in sorted(df[round_col].unique()):
         train = df[df[round_col] < r]
         test = df[df[round_col] == r]
-        if len(train) < 20:
+        if len(train) < effective_min_train:
+            per_round_records.append(
+                {
+                    "round": r,
+                    "n_train": len(train),
+                    "n_test": len(test),
+                    "skipped": True,
+                    "reason": f"min_train_size={effective_min_train}",
+                }
+            )
             continue
 
         model = LogisticRegression(max_iter=2000)
         model.fit(train[list(feature_cols)], train[target_col])
+        last_model = model
 
         proba = model.predict_proba(test[list(feature_cols)])[:, 1]
         out = test[["season", round_col, "game_code", target_col]].copy()
         out["p_home_win"] = proba
         preds.append(out)
 
-    pred_df = pd.concat(preds, ignore_index=True)
-    metrics = {
+        per_round_records.append(
+            {
+                "round": r,
+                "n_train": len(train),
+                "n_test": len(test),
+                "skipped": False,
+                "reason": f"min_train_size={effective_min_train}",
+                "logloss": log_loss(test[target_col], proba),
+                "brier": brier_score_loss(test[target_col], proba),
+                "acc@0.5": accuracy_score(test[target_col], (proba >= 0.5).astype(int)),
+            }
+        )
+
+    pred_df = pd.concat(preds, ignore_index=True) if preds else pd.DataFrame()
+
+    if pred_df.empty:
+        per_round_df = pd.DataFrame(per_round_records) if per_round_records else None
+        raise ValueError(
+            "No predictions were produced. "
+            f"Check training data and min_train_size (effective={effective_min_train}). "
+            "See per-round diagnostics for details."
+        )
+
+    metrics: dict[str, float] = {
         "logloss": log_loss(pred_df[target_col], pred_df["p_home_win"]),
         "brier": brier_score_loss(pred_df[target_col], pred_df["p_home_win"]),
         "acc@0.5": accuracy_score(
             pred_df[target_col], (pred_df["p_home_win"] >= 0.5).astype(int)
         ),
+        "effective_min_train": float(effective_min_train),
     }
 
-    return GameModelResult(pred_df, metrics)
+    upcoming_preds: pd.DataFrame | None = None
+    if upcoming_df is not None and last_model is not None:
+        upcoming_df = upcoming_df.copy()
+        missing_cols = [c for c in feature_cols if c not in upcoming_df.columns]
+        if missing_cols:
+            raise ValueError(f"Upcoming games missing feature columns: {missing_cols}")
+        proba = last_model.predict_proba(upcoming_df[list(feature_cols)])[:, 1]
+        upcoming_preds = upcoming_df[["season", round_col, "game_code"]].copy()
+        upcoming_preds["p_home_win"] = proba
+        upcoming_preds["is_future"] = True
 
+    per_round_df = pd.DataFrame(per_round_records) if per_round_records else None
+
+    return GameModelResult(pred_df, metrics, per_round=per_round_df, upcoming=upcoming_preds)
